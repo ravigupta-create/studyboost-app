@@ -52,6 +52,18 @@ export default function HomePage() {
               </Button>
             </a>
           </div>
+          <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">
+            Need a free API key?{' '}
+            <a
+              href="https://aistudio.google.com/apikey"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-purple-600 dark:text-purple-400 underline font-medium hover:text-purple-700 dark:hover:text-purple-300"
+            >
+              Get one here from Google AI Studio
+            </a>
+            {' '}— takes 30 seconds.
+          </p>
         </div>
       </section>
 
@@ -130,7 +142,7 @@ export default function HomePage() {
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {[
-              { step: '1', title: 'Get a Free API Key', desc: 'Go to aistudio.google.com/apikey and create your free Gemini API key in 30 seconds.' },
+              { step: '1', title: 'Get a Free API Key', desc: 'Go to aistudio.google.com/apikey and create your free Gemini API key in 30 seconds.', link: 'https://aistudio.google.com/apikey' },
               { step: '2', title: 'Add Your Key', desc: 'Paste your key into StudyBoost. It stays in your browser — never sent to any server.' },
               { step: '3', title: 'Start Studying', desc: `Use any of our ${FEATURES.length} tools. AI features stream results in real-time. Offline tools work instantly.` },
             ].map((item) => (
@@ -140,6 +152,16 @@ export default function HomePage() {
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{item.title}</h3>
                 <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">{item.desc}</p>
+                {'link' in item && item.link && (
+                  <a
+                    href={item.link as string}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block mt-2 text-sm text-purple-600 dark:text-purple-400 underline font-medium hover:text-purple-700 dark:hover:text-purple-300"
+                  >
+                    Get your free key here
+                  </a>
+                )}
               </div>
             ))}
           </div>
