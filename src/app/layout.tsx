@@ -8,6 +8,7 @@ import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
 import { ApiKeyBanner } from '@/components/layout/ApiKeyBanner';
 import { ToastContainer } from '@/components/ui/ToastContainer';
+import { AuthGate } from '@/components/shared/AuthGate';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -57,15 +58,17 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen flex flex-col`}
       >
         <ThemeProvider>
-          <ApiKeyProvider>
-            <ToastProvider>
-              <ApiKeyBanner />
-              <Navbar />
-              <main className="flex-1">{children}</main>
-              <Footer />
-              <ToastContainer />
-            </ToastProvider>
-          </ApiKeyProvider>
+          <AuthGate>
+            <ApiKeyProvider>
+              <ToastProvider>
+                <ApiKeyBanner />
+                <Navbar />
+                <main className="flex-1">{children}</main>
+                <Footer />
+                <ToastContainer />
+              </ToastProvider>
+            </ApiKeyProvider>
+          </AuthGate>
         </ThemeProvider>
       </body>
     </html>
