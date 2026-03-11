@@ -9,10 +9,11 @@ export function ToastContainer() {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2">
+    <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2" role="log" aria-live="polite">
       {toasts.map((toast) => (
         <div
           key={toast.id}
+          role="alert"
           className={cn(
             'flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium shadow-lg animate-slide-up cursor-pointer min-w-[280px]',
             {
@@ -23,7 +24,7 @@ export function ToastContainer() {
           )}
           onClick={() => removeToast(toast.id)}
         >
-          <span>
+          <span aria-hidden="true">
             {toast.type === 'success' && '✓'}
             {toast.type === 'error' && '✕'}
             {toast.type === 'info' && 'ℹ'}

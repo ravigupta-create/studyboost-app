@@ -1,13 +1,36 @@
 import { Citation, CitationStyle } from '@/types';
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 export function generateCitation(citation: Citation, style: CitationStyle): string {
+  const safe: Citation = {
+    ...citation,
+    authors: escapeHtml(citation.authors),
+    title: escapeHtml(citation.title),
+    year: escapeHtml(citation.year),
+    publisher: citation.publisher ? escapeHtml(citation.publisher) : undefined,
+    url: citation.url ? escapeHtml(citation.url) : undefined,
+    journal: citation.journal ? escapeHtml(citation.journal) : undefined,
+    volume: citation.volume ? escapeHtml(citation.volume) : undefined,
+    issue: citation.issue ? escapeHtml(citation.issue) : undefined,
+    pages: citation.pages ? escapeHtml(citation.pages) : undefined,
+    accessDate: citation.accessDate ? escapeHtml(citation.accessDate) : undefined,
+  };
+
   switch (style) {
     case 'mla':
-      return generateMLA(citation);
+      return generateMLA(safe);
     case 'apa':
-      return generateAPA(citation);
+      return generateAPA(safe);
     case 'chicago':
-      return generateChicago(citation);
+      return generateChicago(safe);
     default:
       return '';
   }
@@ -20,7 +43,6 @@ function generateMLA(c: Citation): string {
 
   switch (c.type) {
     case 'book': {
-      // Author(s). Title. Publisher, Year.
       let cite = `${authors} `;
       cite += `<i>${c.title}</i>. `;
       if (c.publisher) cite += `${c.publisher}, `;
@@ -28,7 +50,6 @@ function generateMLA(c: Citation): string {
       return cite;
     }
     case 'website': {
-      // Author(s). "Title." Website/Publisher, Year, URL. Accessed Date.
       let cite = `${authors} `;
       cite += `"${c.title}." `;
       if (c.publisher) cite += `<i>${c.publisher}</i>, `;
@@ -39,7 +60,6 @@ function generateMLA(c: Citation): string {
       return cite;
     }
     case 'journal': {
-      // Author(s). "Title." Journal, vol. V, no. I, Year, pp. Pages.
       let cite = `${authors} `;
       cite += `"${c.title}." `;
       if (c.journal) cite += `<i>${c.journal}</i>`;
@@ -52,7 +72,6 @@ function generateMLA(c: Citation): string {
       return cite;
     }
     case 'article': {
-      // Author(s). "Title." Publisher/Source, Year.
       let cite = `${authors} `;
       cite += `"${c.title}." `;
       if (c.publisher) cite += `<i>${c.publisher}</i>, `;
@@ -80,14 +99,12 @@ function generateAPA(c: Citation): string {
 
   switch (c.type) {
     case 'book': {
-      // Author(s). (Year). Title. Publisher.
       let cite = `${authors} (${c.year}). `;
       cite += `<i>${c.title}</i>. `;
       if (c.publisher) cite += `${c.publisher}.`;
       return cite;
     }
     case 'website': {
-      // Author(s). (Year). Title. Site Name. URL
       let cite = `${authors} (${c.year}). `;
       cite += `${c.title}. `;
       if (c.publisher) cite += `<i>${c.publisher}</i>. `;
@@ -95,7 +112,6 @@ function generateAPA(c: Citation): string {
       return cite;
     }
     case 'journal': {
-      // Author(s). (Year). Title. Journal, Volume(Issue), Pages. URL
       let cite = `${authors} (${c.year}). `;
       cite += `${c.title}. `;
       if (c.journal) cite += `<i>${c.journal}</i>`;
@@ -107,7 +123,6 @@ function generateAPA(c: Citation): string {
       return cite;
     }
     case 'article': {
-      // Author(s). (Year). Title. Source. URL
       let cite = `${authors} (${c.year}). `;
       cite += `${c.title}. `;
       if (c.publisher) cite += `<i>${c.publisher}</i>`;
@@ -144,7 +159,6 @@ function generateChicago(c: Citation): string {
 
   switch (c.type) {
     case 'book': {
-      // Author(s). Title. Place: Publisher, Year.
       let cite = `${authors} `;
       cite += `<i>${c.title}</i>. `;
       if (c.publisher) cite += `${c.publisher}, `;
@@ -152,7 +166,6 @@ function generateChicago(c: Citation): string {
       return cite;
     }
     case 'website': {
-      // Author(s). "Title." Publisher. Accessed Date. URL.
       let cite = `${authors} `;
       cite += `"${c.title}." `;
       if (c.publisher) cite += `${c.publisher}. `;
@@ -161,7 +174,6 @@ function generateChicago(c: Citation): string {
       return cite;
     }
     case 'journal': {
-      // Author(s). "Title." Journal Volume, no. Issue (Year): Pages.
       let cite = `${authors} `;
       cite += `"${c.title}." `;
       if (c.journal) cite += `<i>${c.journal}</i>`;
@@ -174,7 +186,6 @@ function generateChicago(c: Citation): string {
       return cite;
     }
     case 'article': {
-      // Author(s). "Title." Source, Year.
       let cite = `${authors} `;
       cite += `"${c.title}." `;
       if (c.publisher) cite += `<i>${c.publisher}</i>, `;

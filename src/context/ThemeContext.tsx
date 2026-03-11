@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useEffect, useState, useCallback, useMemo, ReactNode } from 'react';
 
 type Theme = 'light' | 'dark';
 
@@ -19,11 +19,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const stored = localStorage.getItem('sb-theme') as Theme | null;
-    if (stored) {
-      setTheme(stored);
-    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      setTheme('dark');
+    try {
+      const stored = localStorage.getItem('sb-theme') as Theme | null;
+      if (stored) {
+        setTheme(stored);
+      } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        setTheme('dark');
+      }
+    } catch {
+      // localStorage unavailable
     }
     setMounted(true);
   }, []);
@@ -31,17 +35,23 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!mounted) return;
     document.documentElement.classList.toggle('dark', theme === 'dark');
-    localStorage.setItem('sb-theme', theme);
+    try {
+      localStorage.setItem('sb-theme', theme);
+    } catch {
+      // ignore
+    }
   }, [theme, mounted]);
 
-  const toggleTheme = () => setTheme((t) => (t === 'light' ? 'dark' : 'light'));
+  const toggleTheme = useCallback(() => setTheme((t) => (t === 'light' ? 'dark' : 'light')), []);
+
+  const value = useMemo(() => ({ theme, toggleTheme }), [theme, toggleTheme]);
 
   if (!mounted) {
     return <div className="min-h-screen" />;
   }
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={value}>
       {children}
     </ThemeContext.Provider>
   );

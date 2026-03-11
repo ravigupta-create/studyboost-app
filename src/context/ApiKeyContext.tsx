@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, ReactNode } from 'react';
+import { createContext, useMemo, ReactNode } from 'react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 
 interface ApiKeyContextType {
@@ -20,10 +20,13 @@ export const ApiKeyContext = createContext<ApiKeyContextType>({
 export function ApiKeyProvider({ children }: { children: ReactNode }) {
   const [apiKey, setApiKey, clearApiKey] = useLocalStorage('sb-gemini-key', '');
 
+  const value = useMemo(
+    () => ({ apiKey, setApiKey, clearApiKey, hasKey: apiKey.length > 0 }),
+    [apiKey, setApiKey, clearApiKey]
+  );
+
   return (
-    <ApiKeyContext.Provider
-      value={{ apiKey, setApiKey, clearApiKey, hasKey: apiKey.length > 0 }}
-    >
+    <ApiKeyContext.Provider value={value}>
       {children}
     </ApiKeyContext.Provider>
   );

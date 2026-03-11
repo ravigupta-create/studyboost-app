@@ -93,8 +93,6 @@ export const FEATURES: Feature[] = [
   },
 ];
 
-export const NAV_LINKS = FEATURES.map((f) => ({ name: f.name, href: f.href }));
-
 export const GRADE_POINTS: Record<string, number> = {
   'A+': 4.0, 'A': 4.0, 'A-': 3.7,
   'B+': 3.3, 'B': 3.0, 'B-': 2.7,
