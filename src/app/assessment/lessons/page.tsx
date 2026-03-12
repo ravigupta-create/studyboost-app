@@ -24,7 +24,7 @@ const IDK = -1;
 // Weighted mastery: easy=1, medium=2, hard=3
 // Typical 5 problems: 2 easy(2) + 2 medium(4) + 1 hard(3) = 9 total, need 7 to master
 const DIFF_PTS: Record<string, number> = { easy: 1, medium: 2, hard: 3 };
-const MASTERY_RATIO = 0.78; // ~7/9
+const MASTERY_RATIO = 0.85;
 
 export default function LessonsPage() {
   const { hasKey, apiKey } = useApiKey();
