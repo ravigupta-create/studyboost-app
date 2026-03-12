@@ -130,7 +130,15 @@ export interface AssessmentResult {
   unitScores: UnitScore[];
   overallPercentage: number;
   questions: AssessmentQuestion[];
+  answers: Record<number, number>; // -1 = "I don't know this yet"
+}
+
+export interface PausedAssessment {
+  courseId: string;
+  questions: AssessmentQuestion[];
+  currentIndex: number;
   answers: Record<number, number>;
+  startTime: number;
 }
 
 export interface LessonProgress {

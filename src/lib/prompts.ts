@@ -154,40 +154,69 @@ Generate exactly ${units.length * 2} questions (2 per unit). Each must have exac
 }
 
 export function lessonPrompt(courseName: string, unitName: string, topicName: string, description: string): string {
-  return `You are an expert math tutor creating a lesson for an honors high school student.
+  return `You are an expert math tutor. A student assessed themselves on ${courseName} and does NOT yet know this topic. Your job is to teach them to mastery as efficiently as possible.
 
-Course: ${courseName}
-Unit: ${unitName}
 Topic: ${topicName}
-Description: ${description}
+Unit: ${unitName}
+What they need to learn: ${description}
 
-Create a comprehensive lesson covering this topic. Use markdown formatting and LaTeX notation with $ for inline math and $$ for display math. Structure your response as follows:
+Use markdown formatting. Use LaTeX with $ for inline math and $$ for display math. Be direct — no filler. Teach like the best tutor: clear, concise, build understanding fast.
 
 ## ${topicName}
 
-### Key Concepts
-Explain the core ideas clearly with examples. Use callout boxes (> **Key Idea:** ...) for important definitions and theorems.
+### Why This Matters
+One sentence connecting this topic to the bigger picture.
+
+### Core Ideas
+Teach the essential concepts. For each concept:
+- State the rule/definition clearly in a callout (> **Key Idea:** ...)
+- Show ONE clean example immediately after
+- If there's a common mistake, warn about it (> **Watch out:** ...)
+
+Keep explanations tight. Students learn by doing, not reading.
 
 ### Worked Examples
-Show 2-3 worked examples with step-by-step solutions.
+2 worked examples, increasing difficulty. Show every step with reasoning. These should be honors-level problems that actually test understanding.
 
-### Practice Problems
-Provide exactly 3 practice problems of increasing difficulty. Format each as:
+### Your Turn — Practice
+Exactly 3 problems (easy → medium → hard). The student should be able to solve these if they understood the lesson.
 
-**Problem 1:**
-[problem statement]
+Format each as:
+
+**Problem 1** (Easy):
+[problem]
 
 <details>
-<summary>Show Solution</summary>
+<summary>Solution</summary>
 
-[detailed solution]
+[step-by-step solution]
 
 </details>
 
-### Summary
-Brief recap of the key takeaways.
+**Problem 2** (Medium):
+[problem]
 
-Make the lesson thorough, clear, and appropriate for honors-level students.`;
+<details>
+<summary>Solution</summary>
+
+[step-by-step solution]
+
+</details>
+
+**Problem 3** (Hard):
+[problem]
+
+<details>
+<summary>Solution</summary>
+
+[step-by-step solution]
+
+</details>
+
+### Quick Reference
+Bullet-point cheat sheet of the key formulas/rules from this topic. Nothing else.
+
+Do NOT pad the lesson. Every sentence should teach something. The goal is mastery in minimum time.`;
 }
 
 export function translatePrompt(text: string, targetLang: string): string {

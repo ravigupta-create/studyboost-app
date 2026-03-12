@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { AssessmentResult, LessonProgress } from '@/types';
+import { AssessmentResult, LessonProgress, PausedAssessment } from '@/types';
 
 const STORAGE_KEY = 'sb-assessment';
+const PAUSED_KEY = 'sb-assessment-paused';
 const MAX_RESULTS_PER_COURSE = 10;
 
 interface AssessmentData {
@@ -68,6 +69,23 @@ export function useAssessment() {
     return data.results.filter(r => r.courseId === courseId);
   }, [data.results]);
 
+  // Pause/resume support
+  const savePausedAssessment = useCallback((paused: PausedAssessment) => {
+    localStorage.setItem(PAUSED_KEY, JSON.stringify(paused));
+  }, []);
+
+  const getPausedAssessment = useCallback((): PausedAssessment | null => {
+    try {
+      const raw = localStorage.getItem(PAUSED_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch { /* ignore */ }
+    return null;
+  }, []);
+
+  const clearPausedAssessment = useCallback(() => {
+    localStorage.removeItem(PAUSED_KEY);
+  }, []);
+
   return {
     results: data.results,
     lessonProgress: data.lessonProgress,
@@ -75,5 +93,8 @@ export function useAssessment() {
     markLessonComplete,
     markLessonViewed,
     getResults,
+    savePausedAssessment,
+    getPausedAssessment,
+    clearPausedAssessment,
   };
 }

@@ -17,11 +17,13 @@ import { ApiKeySetup } from '@/components/shared/ApiKeySetup';
 import { MathText } from '@/components/shared/MathText';
 import Link from 'next/link';
 
-type Phase = 'select' | 'loading' | 'quiz' | 'results';
+const IDK = -1; // sentinel for "I don't know this yet"
+
+type Phase = 'select' | 'loading' | 'quiz' | 'results' | 'finishing';
 
 export default function AssessmentPage() {
   const { hasKey, apiKey } = useApiKey();
-  const { saveResult, getResults } = useAssessment();
+  const { saveResult, getResults, savePausedAssessment, getPausedAssessment, clearPausedAssessment } = useAssessment();
   const { logSession } = useStudyStats();
   const { addToast } = useToast();
 
@@ -32,6 +34,31 @@ export default function AssessmentPage() {
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [loadingProgress, setLoadingProgress] = useState('');
   const [startTime, setStartTime] = useState(0);
+
+  // Check for paused assessment on mount
+  const [pausedData, setPausedData] = useState<ReturnType<typeof getPausedAssessment>>(null);
+  useEffect(() => {
+    setPausedData(getPausedAssessment());
+  }, [getPausedAssessment]);
+
+  const resumeAssessment = useCallback(() => {
+    if (!pausedData) return;
+    const course = COURSES.find(c => c.id === pausedData.courseId);
+    if (!course) return;
+    setSelectedCourse(course);
+    setQuestions(pausedData.questions);
+    setCurrentIndex(pausedData.currentIndex);
+    setAnswers(pausedData.answers);
+    setStartTime(pausedData.startTime);
+    clearPausedAssessment();
+    setPausedData(null);
+    setPhase('quiz');
+  }, [pausedData, clearPausedAssessment]);
+
+  const discardPaused = useCallback(() => {
+    clearPausedAssessment();
+    setPausedData(null);
+  }, [clearPausedAssessment]);
 
   const handleSelectCourse = useCallback(async (course: Course) => {
     if (!apiKey) return;
@@ -82,23 +109,56 @@ export default function AssessmentPage() {
     }
   }, [apiKey, addToast]);
 
+  const advanceQuestion = useCallback(() => {
+    if (currentIndex < questions.length - 1) {
+      setCurrentIndex(prev => prev + 1);
+    } else {
+      finishQuiz();
+    }
+  }, [currentIndex, questions.length]);
+
+  const handleIDontKnow = useCallback(() => {
+    setAnswers(prev => ({ ...prev, [currentIndex]: IDK }));
+    // Auto-advance after a brief moment so they see it registered
+    setTimeout(() => {
+      if (currentIndex < questions.length - 1) {
+        setCurrentIndex(prev => prev + 1);
+      } else {
+        // Will be called via finishQuiz in the next render
+        setPhase('finishing');
+      }
+    }, 300);
+  }, [currentIndex, questions.length]);
+
+  const handlePause = useCallback(() => {
+    if (!selectedCourse) return;
+    savePausedAssessment({
+      courseId: selectedCourse.id,
+      questions,
+      currentIndex,
+      answers,
+      startTime,
+    });
+    addToast('Assessment paused. You can resume anytime.', 'info');
+    setPhase('select');
+    setSelectedCourse(null);
+    setPausedData(getPausedAssessment());
+  }, [selectedCourse, questions, currentIndex, answers, startTime, savePausedAssessment, addToast, getPausedAssessment]);
+
   // Keyboard support
   useEffect(() => {
     if (phase !== 'quiz') return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      const hasAnswered = answers[currentIndex] !== undefined;
+      const ans = answers[currentIndex];
+      const hasAnswered = ans !== undefined;
       if (!hasAnswered && e.key >= '1' && e.key <= '4') {
         const idx = parseInt(e.key) - 1;
         if (idx < (questions[currentIndex]?.options?.length ?? 0)) {
           setAnswers(prev => ({ ...prev, [currentIndex]: idx }));
         }
       }
-      if (e.key === 'Enter' && hasAnswered) {
-        if (currentIndex < questions.length - 1) {
-          setCurrentIndex(prev => prev + 1);
-        } else {
-          finishQuiz();
-        }
+      if (e.key === 'Enter' && hasAnswered && ans !== IDK) {
+        advanceQuestion();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -107,16 +167,18 @@ export default function AssessmentPage() {
 
   const unitScores = useMemo((): UnitScore[] => {
     if (!selectedCourse || questions.length === 0) return [];
-    const scoreMap: Record<string, { correct: number; total: number; name: string }> = {};
+    const scoreMap: Record<string, { correct: number; total: number; skipped: number; name: string }> = {};
     selectedCourse.units.forEach(u => {
-      scoreMap[u.id] = { correct: 0, total: 0, name: u.name };
+      scoreMap[u.id] = { correct: 0, total: 0, skipped: 0, name: u.name };
     });
     questions.forEach((q, i) => {
       if (!scoreMap[q.unitId]) {
-        scoreMap[q.unitId] = { correct: 0, total: 0, name: q.unitId };
+        scoreMap[q.unitId] = { correct: 0, total: 0, skipped: 0, name: q.unitId };
       }
       scoreMap[q.unitId].total++;
-      if (answers[i] === q.correctIndex) {
+      if (answers[i] === IDK) {
+        scoreMap[q.unitId].skipped++;
+      } else if (answers[i] === q.correctIndex) {
         scoreMap[q.unitId].correct++;
       }
     });
@@ -138,6 +200,17 @@ export default function AssessmentPage() {
     return total > 0 ? Math.round((correct / total) * 100) : 0;
   }, [unitScores]);
 
+  // Count "I don't know" per unit for results display
+  const unitSkipMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    questions.forEach((q, i) => {
+      if (answers[i] === IDK) {
+        map[q.unitId] = (map[q.unitId] || 0) + 1;
+      }
+    });
+    return map;
+  }, [questions, answers]);
+
   const finishQuiz = useCallback(() => {
     if (!selectedCourse) return;
     const result: AssessmentResult = {
@@ -149,10 +222,18 @@ export default function AssessmentPage() {
       answers,
     };
     saveResult(result);
+    clearPausedAssessment();
     const duration = Math.round((Date.now() - startTime) / 1000);
     logSession('assessment', duration, overallPercentage);
     setPhase('results');
-  }, [selectedCourse, unitScores, overallPercentage, questions, answers, saveResult, logSession, startTime]);
+  }, [selectedCourse, unitScores, overallPercentage, questions, answers, saveResult, clearPausedAssessment, logSession, startTime]);
+
+  // Handle delayed finish from "I don't know" on last question
+  useEffect(() => {
+    if (phase === 'finishing') {
+      finishQuiz();
+    }
+  }, [phase, finishQuiz]);
 
   if (!hasKey) {
     return (
@@ -168,6 +249,29 @@ export default function AssessmentPage() {
     return (
       <div className="max-w-4xl mx-auto px-4 py-8">
         <PageHeader icon="&#x1F4CA;" title="Assessment Mode" description="Choose your course, take a diagnostic assessment, and get personalized lessons." aiPowered />
+
+        {/* Resume paused assessment banner */}
+        {pausedData && (() => {
+          const course = COURSES.find(c => c.id === pausedData.courseId);
+          const answered = Object.keys(pausedData.answers).length;
+          return (
+            <Card className="mb-6 border-purple-300 dark:border-purple-700 bg-purple-50 dark:bg-purple-900/20">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-semibold text-gray-900 dark:text-gray-100">Paused Assessment</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {course?.name} — {answered}/{pausedData.questions.length} questions answered
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="secondary" size="sm" onClick={discardPaused}>Discard</Button>
+                  <Button size="sm" onClick={resumeAssessment}>Resume</Button>
+                </div>
+              </div>
+            </Card>
+          );
+        })()}
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {COURSES.map(course => {
             const topicCount = course.units.reduce((s, u) => s + u.topics.length, 0);
@@ -215,8 +319,9 @@ export default function AssessmentPage() {
   // Phase 3: Quiz
   if (phase === 'quiz' && questions.length > 0) {
     const currentQ = questions[currentIndex];
-    const hasAnswered = answers[currentIndex] !== undefined;
-    const selectedOption = answers[currentIndex];
+    const currentAnswer = answers[currentIndex];
+    const hasAnswered = currentAnswer !== undefined;
+    const isSkipped = currentAnswer === IDK;
 
     // Find unit header
     const currentUnitId = currentQ.unitId;
@@ -251,41 +356,52 @@ export default function AssessmentPage() {
             <MathText text={currentQ.question} />
           </h2>
 
-          <div className="space-y-3">
-            {currentQ.options.map((option, i) => {
-              const isCorrect = i === currentQ.correctIndex;
-              const isSelected = selectedOption === i;
+          {/* "I don't know" skip indicator */}
+          {isSkipped && (
+            <div className="mb-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+              <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
+                Marked as &quot;I don&apos;t know this yet&quot; — this topic will be added to your lessons.
+              </p>
+            </div>
+          )}
 
-              let optionClass = 'w-full text-left px-4 py-3 rounded-lg border-2 transition-all duration-200 font-medium text-sm ';
-              if (!hasAnswered) {
-                optionClass += 'border-gray-200 dark:border-gray-600 hover:border-purple-400 dark:hover:border-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 text-gray-700 dark:text-gray-300 cursor-pointer';
-              } else if (isCorrect) {
-                optionClass += 'border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300';
-              } else if (isSelected && !isCorrect) {
-                optionClass += 'border-red-500 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300';
-              } else {
-                optionClass += 'border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500';
-              }
+          {!isSkipped && (
+            <div className="space-y-3">
+              {currentQ.options.map((option, i) => {
+                const isCorrect = i === currentQ.correctIndex;
+                const isSelected = currentAnswer === i;
 
-              return (
-                <button
-                  key={i}
-                  className={optionClass}
-                  onClick={() => { if (!hasAnswered) setAnswers(prev => ({ ...prev, [currentIndex]: i })); }}
-                  disabled={hasAnswered}
-                >
-                  <span className="flex items-center gap-3">
-                    <span className="flex-shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center text-xs font-bold border-current">
-                      {String.fromCharCode(65 + i)}
+                let optionClass = 'w-full text-left px-4 py-3 rounded-lg border-2 transition-all duration-200 font-medium text-sm ';
+                if (!hasAnswered) {
+                  optionClass += 'border-gray-200 dark:border-gray-600 hover:border-purple-400 dark:hover:border-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 text-gray-700 dark:text-gray-300 cursor-pointer';
+                } else if (isCorrect) {
+                  optionClass += 'border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300';
+                } else if (isSelected && !isCorrect) {
+                  optionClass += 'border-red-500 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300';
+                } else {
+                  optionClass += 'border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500';
+                }
+
+                return (
+                  <button
+                    key={i}
+                    className={optionClass}
+                    onClick={() => { if (!hasAnswered) setAnswers(prev => ({ ...prev, [currentIndex]: i })); }}
+                    disabled={hasAnswered}
+                  >
+                    <span className="flex items-center gap-3">
+                      <span className="flex-shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center text-xs font-bold border-current">
+                        {String.fromCharCode(65 + i)}
+                      </span>
+                      <MathText text={option} />
                     </span>
-                    <MathText text={option} />
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
-          {hasAnswered && (
+          {hasAnswered && !isSkipped && (
             <div className="mt-6 p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
               <p className="text-sm font-semibold text-blue-700 dark:text-blue-300 mb-1">Explanation</p>
               <p className="text-sm text-blue-600 dark:text-blue-400">
@@ -295,27 +411,36 @@ export default function AssessmentPage() {
           )}
         </Card>
 
-        {hasAnswered && (
-          <div className="flex justify-end">
-            <Button onClick={() => {
-              if (currentIndex < questions.length - 1) {
-                setCurrentIndex(prev => prev + 1);
-              } else {
-                finishQuiz();
-              }
-            }}>
+        {/* Action buttons — always visible */}
+        <div className="flex items-center justify-between">
+          <div className="flex gap-2">
+            <Button variant="secondary" size="sm" onClick={handlePause}>
+              Pause Assessment
+            </Button>
+            {!hasAnswered && (
+              <Button variant="ghost" size="sm" onClick={handleIDontKnow}>
+                I don&apos;t know this yet
+              </Button>
+            )}
+          </div>
+          {hasAnswered && !isSkipped && (
+            <Button onClick={advanceQuestion}>
               {currentIndex < questions.length - 1 ? 'Next Question' : 'See Results'}
             </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     );
   }
 
   // Phase 4: Results
-  if (phase === 'results' && selectedCourse) {
+  if ((phase === 'results' || phase === 'finishing') && selectedCourse) {
+    if (phase === 'finishing') return null; // wait for finishQuiz effect
+
     const totalCorrect = unitScores.reduce((s, u) => s + u.correct, 0);
     const totalQuestions = unitScores.reduce((s, u) => s + u.total, 0);
+    const totalSkipped = Object.values(answers).filter(a => a === IDK).length;
+    const unitsToLearn = unitScores.filter(us => us.percentage < 100);
 
     return (
       <div className="max-w-4xl mx-auto px-4 py-8">
@@ -329,10 +454,15 @@ export default function AssessmentPage() {
             <div className="text-2xl font-semibold mb-1 text-gray-700 dark:text-gray-300">
               {overallPercentage}%
             </div>
+            {totalSkipped > 0 && (
+              <p className="text-sm text-amber-600 dark:text-amber-400 mb-1">
+                {totalSkipped} question{totalSkipped > 1 ? 's' : ''} marked &quot;I don&apos;t know this yet&quot;
+              </p>
+            )}
             <p className="text-gray-500 dark:text-gray-400">
-              {overallPercentage >= 90 ? 'Excellent! You have strong mastery across units.'
-                : overallPercentage >= 70 ? 'Good work! Review the units below to strengthen weak areas.'
-                : 'Keep studying! Check the lessons for topics that need review.'}
+              {unitsToLearn.length === 0
+                ? 'Perfect! You\'ve mastered all units.'
+                : `${unitsToLearn.length} unit${unitsToLearn.length > 1 ? 's' : ''} to work on. Lessons are ready for you.`}
             </p>
           </div>
         </Card>
@@ -341,12 +471,14 @@ export default function AssessmentPage() {
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Per-Unit Scores</h3>
           <div className="space-y-3">
             {unitScores.map(us => {
-              const barColor = us.percentage >= 80 ? 'bg-green-500' : us.percentage >= 50 ? 'bg-yellow-500' : 'bg-red-500';
-              const badge = us.percentage >= 80 ? 'Proficient' : us.percentage >= 50 ? 'Developing' : 'Needs Review';
-              const badgeColor = us.percentage >= 80
+              const skipped = unitSkipMap[us.unitId] || 0;
+              const isMastered = us.percentage === 100;
+              const barColor = isMastered ? 'bg-green-500' : us.percentage >= 50 ? 'bg-yellow-500' : 'bg-red-500';
+              const badge = isMastered ? 'Mastered' : skipped > 0 ? 'Needs Lesson' : 'Needs Review';
+              const badgeColor = isMastered
                 ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
-                : us.percentage >= 50
-                ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
+                : skipped > 0
+                ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
                 : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300';
 
               return (
@@ -355,7 +487,10 @@ export default function AssessmentPage() {
                     <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{us.unitName}</span>
                     <div className="flex items-center gap-2">
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${badgeColor}`}>{badge}</span>
-                      <span className="text-sm text-gray-500 dark:text-gray-400">{us.correct}/{us.total}</span>
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                        {us.correct}/{us.total}
+                        {skipped > 0 && <span className="text-amber-500 ml-1">({skipped} skipped)</span>}
+                      </span>
                     </div>
                   </div>
                   <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -371,9 +506,11 @@ export default function AssessmentPage() {
           <Button variant="secondary" onClick={() => { setPhase('select'); setSelectedCourse(null); }}>
             Retake
           </Button>
-          <Link href={`/assessment/lessons?course=${selectedCourse.id}`}>
-            <Button>View Lessons</Button>
-          </Link>
+          {unitsToLearn.length > 0 && (
+            <Link href={`/assessment/lessons?course=${selectedCourse.id}`}>
+              <Button>Start Lessons ({unitsToLearn.length} unit{unitsToLearn.length > 1 ? 's' : ''} to learn)</Button>
+            </Link>
+          )}
         </div>
       </div>
     );
