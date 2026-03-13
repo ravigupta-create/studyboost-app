@@ -2,20 +2,14 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useApiKey } from '@/hooks/useApiKey';
 import { useAssessment } from '@/hooks/useAssessment';
-import { useGeminiStream } from '@/hooks/useGemini';
-import { useToast } from '@/hooks/useToast';
-import { callGeminiJSON } from '@/lib/gemini';
-import { lessonPrompt, practiceProblemsPrompt, retryPracticePrompt } from '@/lib/prompts';
+import { getLessonContent, getPracticeProblems } from '@/lib/content';
 import { COURSES, type Course, type Topic, type Unit } from '@/lib/curriculum';
 import { LessonProblem } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Select } from '@/components/ui/Select';
-import { Spinner } from '@/components/ui/Spinner';
 import { PageHeader } from '@/components/shared/PageHeader';
-import { ApiKeySetup } from '@/components/shared/ApiKeySetup';
 import { MarkdownRenderer } from '@/components/shared/MarkdownRenderer';
 import { MathText } from '@/components/shared/MathText';
 
@@ -27,24 +21,22 @@ const DIFF_PTS: Record<string, number> = { easy: 1, medium: 2, hard: 3 };
 const MASTERY_RATIO = 0.85;
 
 export default function LessonsPage() {
-  const { hasKey, apiKey } = useApiKey();
   const searchParams = useSearchParams();
   const { results, lessonProgress, markLessonComplete, markLessonViewed } = useAssessment();
-  const { output, loading: lessonLoading, generate, stop } = useGeminiStream();
-  const { addToast } = useToast();
 
   const [selectedCourseId, setSelectedCourseId] = useState(searchParams.get('course') || COURSES[0].id);
   const [activeTopic, setActiveTopic] = useState<{ course: Course; unit: Unit; topic: Topic } | null>(null);
   const [expandedUnits, setExpandedUnits] = useState<Set<string>>(new Set());
 
+  // Lesson content (loaded from hardcoded data)
+  const [lessonContent, setLessonContent] = useState('');
+
   // Practice state — problems are part of the lesson, not a separate quiz
   const [problems, setProblems] = useState<LessonProblem[]>([]);
-  const [problemsLoading, setProblemsLoading] = useState(false);
   const [checkedProblems, setCheckedProblems] = useState<Record<number, number>>({});
   const [masteryDetermined, setMasteryDetermined] = useState(false);
   const [mastered, setMastered] = useState(false);
   const [practiceOnly, setPracticeOnly] = useState(false); // skip lesson, go straight to practice
-  const [missedConcepts, setMissedConcepts] = useState<string[]>([]); // for targeted retry
   const [showHint, setShowHint] = useState<Record<number, boolean>>({}); // hint visibility per problem
 
   const resultRef = useRef<HTMLDivElement>(null);
@@ -96,63 +88,31 @@ export default function LessonsPage() {
     filteredUnits.flatMap(unit => unit.topics.filter(t => !completionMap[t.id]).map(topic => ({ course: selectedCourse, unit, topic }))),
   [filteredUnits, selectedCourse, completionMap]);
 
-  // Generate practice problems (shared by startLesson and startPracticeOnly)
-  const generateProblems = useCallback(async (course: Course, unit: Unit, topic: Topic, missed?: string[]) => {
-    if (!apiKey) return;
-    setProblemsLoading(true);
-    try {
-      const prompt = missed && missed.length > 0
-        ? retryPracticePrompt(course.name, unit.name, topic.name, topic.description, missed)
-        : practiceProblemsPrompt(course.name, unit.name, topic.name, topic.description);
-      const result = await callGeminiJSON<LessonProblem[]>(apiKey, prompt);
-      if (Array.isArray(result) && result.length > 0) setProblems(result);
-    } catch (err: unknown) {
-      addToast(err instanceof Error ? err.message : 'Failed to generate practice.', 'error');
-    } finally {
-      setProblemsLoading(false);
-    }
-  }, [apiKey, addToast]);
-
-  // Start lesson: teaching + practice generate in parallel
-  const startLesson = useCallback(async (course: Course, unit: Unit, topic: Topic) => {
-    if (!apiKey) {
-      addToast('Please add your Gemini API key above to start a lesson.', 'error');
-      return;
-    }
-    stop();
+  // Start lesson: load hardcoded content instantly
+  const startLesson = useCallback((course: Course, unit: Unit, topic: Topic) => {
     setActiveTopic({ course, unit, topic });
-    setProblems([]);
+    setLessonContent(getLessonContent(topic.id));
+    setProblems(getPracticeProblems(topic.id));
     setCheckedProblems({});
     setMasteryDetermined(false);
     setMastered(false);
     setPracticeOnly(false);
-    setMissedConcepts([]);
     setShowHint({});
     markLessonViewed(topic.id);
-
-    generate(lessonPrompt(course.name, unit.name, topic.name, topic.description));
-    generateProblems(course, unit, topic);
-  }, [generate, stop, markLessonViewed, generateProblems, apiKey, addToast]);
+  }, [markLessonViewed]);
 
   // Skip straight to practice (for students who know the concept but got assessment wrong)
-  const startPracticeOnly = useCallback(async (course: Course, unit: Unit, topic: Topic) => {
-    if (!apiKey) {
-      addToast('Please add your Gemini API key above to start practice.', 'error');
-      return;
-    }
-    stop();
+  const startPracticeOnly = useCallback((course: Course, unit: Unit, topic: Topic) => {
     setActiveTopic({ course, unit, topic });
-    setProblems([]);
+    setLessonContent('');
+    setProblems(getPracticeProblems(topic.id));
     setCheckedProblems({});
     setMasteryDetermined(false);
     setMastered(false);
     setPracticeOnly(true);
-    setMissedConcepts([]);
     setShowHint({});
     markLessonViewed(topic.id);
-
-    generateProblems(course, unit, topic);
-  }, [stop, markLessonViewed, generateProblems, apiKey, addToast]);
+  }, [markLessonViewed]);
 
   // Check answer for a problem
   const checkAnswer = useCallback((idx: number, option: number) => {
@@ -174,12 +134,12 @@ export default function LessonsPage() {
     return () => window.removeEventListener('keydown', handler);
   }, [problems, checkedProblems, masteryDetermined, checkAnswer]);
 
-  // Auto-scroll to practice section when lesson finishes streaming (or immediately in practice-only mode)
+  // Auto-scroll to practice section when content is ready
   useEffect(() => {
-    if (problems.length > 0 && Object.keys(checkedProblems).length === 0 && (practiceOnly || !lessonLoading)) {
+    if (problems.length > 0 && Object.keys(checkedProblems).length === 0) {
       setTimeout(() => practiceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300);
     }
-  }, [lessonLoading, problems, checkedProblems, practiceOnly]);
+  }, [problems, checkedProblems]);
 
   // Evaluate mastery — supports early exit if clearly mastered
   useEffect(() => {
@@ -204,21 +164,15 @@ export default function LessonsPage() {
     if (!allChecked) return;
 
     let earned = 0, total = 0;
-    const missed: string[] = [];
     problems.forEach((p, i) => {
       const pts = DIFF_PTS[p.difficulty] || 1;
       total += pts;
-      if (checkedProblems[i] === p.correctIndex) {
-        earned += pts;
-      } else {
-        missed.push(p.question);
-      }
+      if (checkedProblems[i] === p.correctIndex) earned += pts;
     });
 
     const passed = total > 0 && (earned / total) >= MASTERY_RATIO;
     setMasteryDetermined(true);
     setMastered(passed);
-    if (!passed) setMissedConcepts(missed);
     if (passed && activeTopic) markLessonComplete(activeTopic.topic.id);
 
     setTimeout(() => resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
@@ -227,25 +181,22 @@ export default function LessonsPage() {
   const goToNextTopic = useCallback(() => {
     if (!activeTopic) return;
     const remaining = unmasteredTopics.filter(t => t.topic.id !== activeTopic.topic.id);
-    if (remaining.length === 0) { stop(); setActiveTopic(null); return; }
+    if (remaining.length === 0) { setActiveTopic(null); return; }
     const idx = unmasteredTopics.findIndex(t => t.topic.id === activeTopic.topic.id);
     const next = remaining[Math.min(idx, remaining.length - 1)];
     startLesson(next.course, next.unit, next.topic);
-  }, [activeTopic, unmasteredTopics, stop, startLesson]);
+  }, [activeTopic, unmasteredTopics, startLesson]);
 
-  // Retry with targeted problems based on what they got wrong
+  // Retry — reset practice problems so student can try again
   const retryLesson = useCallback(() => {
     if (!activeTopic) return;
-    stop();
-    setProblems([]);
     setCheckedProblems({});
     setMasteryDetermined(false);
     setMastered(false);
-    setPracticeOnly(true); // no need to re-read the lesson on retry
     setShowHint({});
-
-    generateProblems(activeTopic.course, activeTopic.unit, activeTopic.topic, missedConcepts);
-  }, [activeTopic, stop, generateProblems, missedConcepts]);
+    // Re-load same problems — with hardcoded content, they need to get them right this time
+    setProblems(getPracticeProblems(activeTopic.topic.id));
+  }, [activeTopic]);
 
   useEffect(() => {
     if (latestResult) {
@@ -260,7 +211,7 @@ export default function LessonsPage() {
     return (
       <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="flex items-center gap-2 mb-4">
-          <Button variant="ghost" size="sm" onClick={() => { stop(); setActiveTopic(null); }}>
+          <Button variant="ghost" size="sm" onClick={() => { setActiveTopic(null); }}>
             &larr; Back to Topics
           </Button>
           <span className="text-sm text-gray-400 dark:text-gray-500">
@@ -269,28 +220,9 @@ export default function LessonsPage() {
         </div>
 
         {/* Teaching content — hidden in practice-only mode */}
-        {!practiceOnly && (
+        {!practiceOnly && lessonContent && (
           <Card className="mb-6">
-            {lessonLoading && !output && (
-              <div className="text-center py-12">
-                <Spinner className="h-8 w-8 mx-auto mb-4" />
-                <p className="text-gray-500 dark:text-gray-400">Generating lesson...</p>
-              </div>
-            )}
-            {output && <MarkdownRenderer content={output} />}
-            {lessonLoading && output && (
-              <div className="flex justify-center mt-4">
-                <Button variant="secondary" size="sm" onClick={stop}>Stop Generating</Button>
-              </div>
-            )}
-          </Card>
-        )}
-
-        {/* Practice problems — part of the lesson */}
-        {problemsLoading && (
-          <Card className="text-center py-8 mb-4">
-            <Spinner className="h-6 w-6 mx-auto mb-3" />
-            <p className="text-sm text-gray-500 dark:text-gray-400">Loading practice problems...</p>
+            <MarkdownRenderer content={lessonContent} />
           </Card>
         )}
 
@@ -394,7 +326,7 @@ export default function LessonsPage() {
                         <p className="text-sm text-green-600 dark:text-green-400">This topic has been removed from your list.</p>
                       </div>
                       <div className="flex gap-2">
-                        <Button variant="secondary" size="sm" onClick={() => { stop(); setActiveTopic(null); }}>
+                        <Button variant="secondary" size="sm" onClick={() => { setActiveTopic(null); }}>
                           Back to Topics
                         </Button>
                         {unmasteredTopics.filter(t => t.topic.id !== activeTopic.topic.id).length > 0 && (
@@ -408,7 +340,7 @@ export default function LessonsPage() {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="font-semibold text-amber-700 dark:text-amber-300">Review the solutions above, then try again.</p>
-                        <p className="text-sm text-amber-600 dark:text-amber-400">Next attempt will focus on what you missed.</p>
+                        <p className="text-sm text-amber-600 dark:text-amber-400">Read through the step-by-step solutions — they&apos;ll help.</p>
                       </div>
                       <div className="flex gap-2">
                         {practiceOnly && (
@@ -416,7 +348,7 @@ export default function LessonsPage() {
                             Read Lesson First
                           </Button>
                         )}
-                        <Button variant="secondary" size="sm" onClick={() => { stop(); setActiveTopic(null); }}>
+                        <Button variant="secondary" size="sm" onClick={() => setActiveTopic(null)}>
                           Back to Topics
                         </Button>
                         <Button size="sm" onClick={retryLesson}>Try Again</Button>
@@ -435,13 +367,7 @@ export default function LessonsPage() {
   // ==================== TOPIC OVERVIEW ====================
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
-      <PageHeader icon="&#x1F4D6;" title="Lessons" description="Only showing topics you need to learn. Mastered topics are hidden." aiPowered />
-
-      {!hasKey && (
-        <Card className="mb-6">
-          <ApiKeySetup />
-        </Card>
-      )}
+      <PageHeader icon="&#x1F4D6;" title="Lessons" description="Only showing topics you need to learn. Mastered topics are hidden." />
 
       <div className="mb-6">
         <Select value={selectedCourseId} onChange={e => { setSelectedCourseId(e.target.value); setExpandedUnits(new Set()); }}>

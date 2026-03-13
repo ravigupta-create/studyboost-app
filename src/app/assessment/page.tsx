@@ -1,38 +1,32 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useApiKey } from '@/hooks/useApiKey';
 import { useAssessment } from '@/hooks/useAssessment';
 import { useStudyStats } from '@/hooks/useStudyStats';
 import { useToast } from '@/hooks/useToast';
-import { callGeminiJSON } from '@/lib/gemini';
-import { assessmentPrompt } from '@/lib/prompts';
+import { getAssessmentQuestions } from '@/lib/content';
 import { COURSES, type Course } from '@/lib/curriculum';
-import { AssessmentQuestion, AssessmentResult, UnitScore } from '@/types';
+import { AssessmentResult, UnitScore } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { Spinner } from '@/components/ui/Spinner';
 import { PageHeader } from '@/components/shared/PageHeader';
-import { ApiKeySetup } from '@/components/shared/ApiKeySetup';
 import { MathText } from '@/components/shared/MathText';
 import Link from 'next/link';
 
 const IDK = -1; // sentinel for "I don't know this yet"
 
-type Phase = 'select' | 'loading' | 'quiz' | 'results' | 'finishing';
+type Phase = 'select' | 'quiz' | 'results' | 'finishing';
 
 export default function AssessmentPage() {
-  const { hasKey, apiKey } = useApiKey();
   const { saveResult, getResults, savePausedAssessment, getPausedAssessment, clearPausedAssessment } = useAssessment();
   const { logSession } = useStudyStats();
   const { addToast } = useToast();
 
   const [phase, setPhase] = useState<Phase>('select');
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
-  const [questions, setQuestions] = useState<AssessmentQuestion[]>([]);
+  const [questions, setQuestions] = useState<AssessmentResult['questions']>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<number, number>>({});
-  const [loadingProgress, setLoadingProgress] = useState('');
   const [startTime, setStartTime] = useState(0);
 
   // Check for paused assessment on mount
@@ -60,57 +54,19 @@ export default function AssessmentPage() {
     setPausedData(null);
   }, [clearPausedAssessment]);
 
-  const handleSelectCourse = useCallback(async (course: Course) => {
-    if (!apiKey) {
-      addToast('Please add your Gemini API key above to start an assessment.', 'error');
+  const handleSelectCourse = useCallback((course: Course) => {
+    const allQuestions = getAssessmentQuestions(course.id);
+    if (allQuestions.length === 0) {
+      addToast('No questions available for this course.', 'error');
       return;
     }
     setSelectedCourse(course);
-    setPhase('loading');
-    setQuestions([]);
+    setQuestions(allQuestions);
     setCurrentIndex(0);
     setAnswers({});
     setStartTime(Date.now());
-
-    const units = course.units;
-    const batchSize = 4;
-    const batches: typeof units[] = [];
-    for (let i = 0; i < units.length; i += batchSize) {
-      batches.push(units.slice(i, i + batchSize));
-    }
-
-    try {
-      const allQuestions: AssessmentQuestion[] = [];
-      const results = await Promise.all(
-        batches.map(async (batch, batchIdx) => {
-          setLoadingProgress(`Generating questions... (batch ${batchIdx + 1}/${batches.length})`);
-          const unitData = batch.map(u => ({
-            id: u.id,
-            name: u.name,
-            topicNames: u.topics.map(t => t.name),
-          }));
-          return callGeminiJSON<AssessmentQuestion[]>(apiKey, assessmentPrompt(unitData));
-        })
-      );
-
-      for (const batch of results) {
-        if (Array.isArray(batch)) {
-          allQuestions.push(...batch);
-        }
-      }
-
-      if (allQuestions.length === 0) {
-        throw new Error('No questions were generated.');
-      }
-
-      setQuestions(allQuestions);
-      setPhase('quiz');
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to generate assessment.';
-      addToast(msg, 'error');
-      setPhase('select');
-    }
-  }, [apiKey, addToast]);
+    setPhase('quiz');
+  }, [addToast]);
 
   const advanceQuestion = useCallback(() => {
     if (currentIndex < questions.length - 1) {
@@ -242,13 +198,7 @@ export default function AssessmentPage() {
   if (phase === 'select') {
     return (
       <div className="max-w-4xl mx-auto px-4 py-8">
-        <PageHeader icon="&#x1F4CA;" title="Assessment Mode" description="Choose your course, take a diagnostic assessment, and get personalized lessons." aiPowered />
-
-        {!hasKey && (
-          <Card className="mb-6">
-            <ApiKeySetup />
-          </Card>
-        )}
+        <PageHeader icon="&#x1F4CA;" title="Assessment Mode" description="Choose your course, take a diagnostic assessment, and get personalized lessons." />
 
         {/* Resume paused assessment banner */}
         {pausedData && (() => {
@@ -300,23 +250,7 @@ export default function AssessmentPage() {
     );
   }
 
-  // Phase 2: Loading
-  if (phase === 'loading') {
-    return (
-      <div className="max-w-3xl mx-auto px-4 py-8">
-        <PageHeader icon="&#x1F4CA;" title="Assessment Mode" description="Generating your assessment..." aiPowered />
-        <Card className="text-center py-12">
-          <Spinner className="h-8 w-8 mx-auto mb-4" />
-          <p className="text-gray-600 dark:text-gray-400 font-medium">{loadingProgress || 'Preparing questions...'}</p>
-          <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">
-            Generating {selectedCourse?.units.length ? selectedCourse.units.length * 2 : ''} questions across {selectedCourse?.units.length} units
-          </p>
-        </Card>
-      </div>
-    );
-  }
-
-  // Phase 3: Quiz
+  // Phase 2: Quiz
   if (phase === 'quiz' && questions.length > 0) {
     const currentQ = questions[currentIndex];
     const currentAnswer = answers[currentIndex];
@@ -330,7 +264,7 @@ export default function AssessmentPage() {
 
     return (
       <div className="max-w-3xl mx-auto px-4 py-8">
-        <PageHeader icon="&#x1F4CA;" title="Assessment Mode" description={selectedCourse?.name || ''} aiPowered />
+        <PageHeader icon="&#x1F4CA;" title="Assessment Mode" description={selectedCourse?.name || ''} />
 
         {/* Progress bar */}
         <div className="flex items-center justify-between mb-4">
@@ -444,7 +378,7 @@ export default function AssessmentPage() {
 
     return (
       <div className="max-w-4xl mx-auto px-4 py-8">
-        <PageHeader icon="&#x1F4CA;" title="Assessment Results" description={selectedCourse.name} aiPowered />
+        <PageHeader icon="&#x1F4CA;" title="Assessment Results" description={selectedCourse.name} />
 
         <Card className="text-center mb-6">
           <div className="py-6">

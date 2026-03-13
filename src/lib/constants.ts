@@ -4,10 +4,10 @@ export const FEATURES: Feature[] = [
   {
     id: 'assessment',
     name: 'Assessment Mode',
-    description: 'Diagnostic math assessment with personalized AI lessons for Math 1/2/3 Honors.',
+    description: 'Diagnostic math assessment with personalized lessons for Integrated Math 1/2/3 Honors.',
     href: '/assessment',
     icon: '📊',
-    aiPowered: true,
+    aiPowered: false,
     color: 'from-blue-600 to-purple-600',
   },
   {
