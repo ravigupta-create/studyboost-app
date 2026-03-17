@@ -145,10 +145,10 @@ export const QUESTIONS: AssessmentQuestion[] = [
   // ---- m1-geometry (Geometry) ----
   {
     unitId: 'm1-geometry',
-    question: 'Two parallel lines are cut by a transversal. One alternate interior angle is $62°$. What is the co-interior angle on the same side?',
+    question: 'Two parallel lines are cut by a transversal. One angle is $62°$. What is the same-side interior angle?',
     options: ['$62°$', '$118°$', '$128°$', '$152°$'],
     correctIndex: 1,
-    explanation: 'Co-interior angles are supplementary: $180° - 62° = 118°$.'
+    explanation: 'Same-side interior angles (also called consecutive interior angles) are supplementary: $180° - 62° = 118°$.'
   },
   {
     unitId: 'm1-geometry',
