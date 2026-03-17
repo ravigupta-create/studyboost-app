@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAssessment } from '@/hooks/useAssessment';
 import { useStudyStats } from '@/hooks/useStudyStats';
 import { useToast } from '@/hooks/useToast';
@@ -20,6 +20,7 @@ type Phase = 'select' | 'quiz' | 'results' | 'finishing';
 
 export default function AssessmentPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { saveResult, getResults, savePausedAssessment, getPausedAssessment, clearPausedAssessment } = useAssessment();
   const { logSession } = useStudyStats();
   const { addToast } = useToast();
@@ -36,6 +37,28 @@ export default function AssessmentPage() {
   useEffect(() => {
     setPausedData(getPausedAssessment());
   }, [getPausedAssessment]);
+
+  // Auto-select course from query param
+  const autoSelectedRef = useRef(false);
+  useEffect(() => {
+    if (autoSelectedRef.current) return;
+    const courseParam = searchParams.get('course');
+    if (courseParam && phase === 'select' && !pausedData) {
+      const course = COURSES.find(c => c.id === courseParam);
+      if (course) {
+        autoSelectedRef.current = true;
+        const allQuestions = getAssessmentQuestions(course.id);
+        if (allQuestions.length > 0) {
+          setSelectedCourse(course);
+          setQuestions(allQuestions);
+          setCurrentIndex(0);
+          setAnswers({});
+          setStartTime(Date.now());
+          setPhase('quiz');
+        }
+      }
+    }
+  }, [searchParams, phase, pausedData]);
 
   const resumeAssessment = useCallback(() => {
     if (!pausedData) return;

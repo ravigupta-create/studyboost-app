@@ -1,7 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { FEATURES } from '@/lib/constants';
+import { COURSES } from '@/lib/curriculum';
 import { FeatureCard } from '@/components/shared/FeatureCard';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -13,8 +15,10 @@ import { useLibrary } from '@/hooks/useLibrary';
 import { formatDuration } from '@/lib/export';
 
 export default function HomePage() {
+  const router = useRouter();
   const { hasKey } = useApiKey();
   const [showKey, setShowKey] = useState(false);
+  const [showAssessmentPicker, setShowAssessmentPicker] = useState(false);
   const { stats } = useStudyStats();
   const { items } = useLibrary();
   const [filter, setFilter] = useState<'all' | 'ai' | 'offline'>('all');
@@ -128,9 +132,13 @@ export default function HomePage() {
           </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filtered.map((feature) => (
-            <FeatureCard key={feature.id} feature={feature} />
-          ))}
+          {filtered.map((feature) =>
+            feature.id === 'assessment' ? (
+              <FeatureCard key={feature.id} feature={feature} onClick={() => setShowAssessmentPicker(true)} />
+            ) : (
+              <FeatureCard key={feature.id} feature={feature} />
+            )
+          )}
         </div>
       </section>
 
@@ -170,6 +178,33 @@ export default function HomePage() {
 
       <Modal open={showKey} onClose={() => setShowKey(false)}>
         <ApiKeySetup onDone={() => setShowKey(false)} />
+      </Modal>
+
+      <Modal open={showAssessmentPicker} onClose={() => setShowAssessmentPicker(false)}>
+        <div className="text-center mb-6">
+          <span className="text-3xl">📊</span>
+          <h2 className="mt-2 text-xl font-bold text-gray-900 dark:text-gray-100">Choose Your Subject</h2>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Select a course to start your diagnostic assessment.</p>
+        </div>
+        <div className="space-y-3">
+          {COURSES.map(course => (
+            <button
+              key={course.id}
+              onClick={() => {
+                setShowAssessmentPicker(false);
+                router.push(`/assessment?course=${course.id}`);
+              }}
+              className="w-full text-left p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-purple-400 dark:hover:border-purple-500 hover:shadow-md transition-all duration-200 group"
+            >
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100 group-hover:text-purple-600 dark:group-hover:text-purple-400">
+                {course.name}
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {course.units.length} units · {course.units.reduce((s, u) => s + u.topics.length, 0)} topics
+              </p>
+            </button>
+          ))}
+        </div>
       </Modal>
     </div>
   );
