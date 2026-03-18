@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import katex from 'katex';
+import 'katex/dist/katex.min.css';
 
 export function MathText({ text }: { text: string }) {
   const html = useMemo(() => {
