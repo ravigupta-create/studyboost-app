@@ -79,3 +79,14 @@ body {
 .prose code::after {
   content: none;
 }
+
+/* KaTeX: hide MathML accessibility layer (visible rendering is in .katex-html) */
+.katex-mathml {
+  position: absolute !important;
+  clip: rect(1px, 1px, 1px, 1px) !important;
+  padding: 0 !important;
+  border: 0 !important;
+  height: 1px !important;
+  width: 1px !important;
+  overflow: hidden !important;
+}
