@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { FEATURES } from '@/lib/constants';
+import { FEATURES, FEATURE_CATEGORIES } from '@/lib/constants';
 import { COURSES } from '@/lib/curriculum';
 import { FeatureCard } from '@/components/shared/FeatureCard';
 import { Button } from '@/components/ui/Button';
@@ -14,6 +14,8 @@ import { useStudyStats } from '@/hooks/useStudyStats';
 import { useLibrary } from '@/hooks/useLibrary';
 import { formatDuration } from '@/lib/export';
 
+type FilterType = 'all' | 'ai' | 'offline' | string;
+
 export default function HomePage() {
   const router = useRouter();
   const { hasKey } = useApiKey();
@@ -21,11 +23,23 @@ export default function HomePage() {
   const [showAssessmentPicker, setShowAssessmentPicker] = useState(false);
   const { stats } = useStudyStats();
   const { items } = useLibrary();
-  const [filter, setFilter] = useState<'all' | 'ai' | 'offline'>('all');
+  const [filter, setFilter] = useState<FilterType>('all');
+  const [search, setSearch] = useState('');
 
   const aiFeatures = FEATURES.filter(f => f.aiPowered);
   const offlineFeatures = FEATURES.filter(f => !f.aiPowered);
-  const filtered = filter === 'all' ? FEATURES : filter === 'ai' ? aiFeatures : offlineFeatures;
+
+  const filtered = useMemo(() => {
+    let feats = FEATURES;
+    if (filter === 'ai') feats = aiFeatures;
+    else if (filter === 'offline') feats = offlineFeatures;
+    else if (filter !== 'all') feats = FEATURES.filter(f => f.category === filter);
+    if (search) {
+      const q = search.toLowerCase();
+      feats = feats.filter(f => f.name.toLowerCase().includes(q) || f.description.toLowerCase().includes(q) || f.category.toLowerCase().includes(q));
+    }
+    return feats;
+  }, [filter, search, aiFeatures, offlineFeatures]);
 
   const hasStats = stats.totalSessions > 0;
 
@@ -79,27 +93,19 @@ export default function HomePage() {
           </h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <Card className="text-center py-4">
-              <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                {stats.streak}
-              </div>
+              <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{stats.streak}</div>
               <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Day Streak</div>
             </Card>
             <Card className="text-center py-4">
-              <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
-                {formatDuration(stats.weekStudyTime)}
-              </div>
+              <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{formatDuration(stats.weekStudyTime)}</div>
               <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">This Week</div>
             </Card>
             <Card className="text-center py-4">
-              <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-                {stats.totalSessions}
-              </div>
+              <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{stats.totalSessions}</div>
               <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Total Sessions</div>
             </Card>
             <Card className="text-center py-4">
-              <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">
-                {items.length}
-              </div>
+              <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">{items.length}</div>
               <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Saved Items</div>
             </Card>
           </div>
@@ -115,31 +121,72 @@ export default function HomePage() {
           <p className="mt-3 text-gray-500 dark:text-gray-400">
             AI features require a free Gemini API key. Offline tools work instantly.
           </p>
-          <div className="flex items-center justify-center gap-2 mt-6">
-            {(['all', 'ai', 'offline'] as const).map(f => (
+
+          {/* Search */}
+          <div className="mt-6 max-w-md mx-auto">
+            <input
+              type="text"
+              placeholder="Search tools..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+            />
+          </div>
+
+          {/* Filter tabs */}
+          <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
+            {[
+              { key: 'all', label: `All (${FEATURES.length})` },
+              { key: 'ai', label: `AI-Powered (${aiFeatures.length})` },
+              { key: 'offline', label: `Offline (${offlineFeatures.length})` },
+            ].map(f => (
               <button
-                key={f}
-                onClick={() => setFilter(f)}
+                key={f.key}
+                onClick={() => setFilter(f.key)}
                 className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                  filter === f
+                  filter === f.key
                     ? 'bg-purple-600 text-white'
                     : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
                 }`}
               >
-                {f === 'all' ? `All (${FEATURES.length})` : f === 'ai' ? `AI-Powered (${aiFeatures.length})` : `Offline (${offlineFeatures.length})`}
+                {f.label}
               </button>
             ))}
+            <span className="text-gray-300 dark:text-gray-600">|</span>
+            {FEATURE_CATEGORIES.map(cat => {
+              const count = FEATURES.filter(f => f.category === cat).length;
+              return (
+                <button
+                  key={cat}
+                  onClick={() => setFilter(filter === cat ? 'all' : cat)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                    filter === cat
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  {cat} ({count})
+                </button>
+              );
+            })}
           </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filtered.map((feature) =>
-            feature.id === 'assessment' ? (
-              <FeatureCard key={feature.id} feature={feature} onClick={() => setShowAssessmentPicker(true)} />
-            ) : (
-              <FeatureCard key={feature.id} feature={feature} />
-            )
-          )}
-        </div>
+
+        {filtered.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-gray-400 dark:text-gray-500">No tools match your search.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filtered.map((feature) =>
+              feature.id === 'assessment' ? (
+                <FeatureCard key={feature.id} feature={feature} onClick={() => setShowAssessmentPicker(true)} />
+              ) : (
+                <FeatureCard key={feature.id} feature={feature} />
+              )
+            )}
+          </div>
+        )}
       </section>
 
       {/* How it works */}

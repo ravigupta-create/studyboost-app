@@ -6,6 +6,7 @@ export interface Feature {
   icon: string;
   aiPowered: boolean;
   color: string;
+  category: string;
 }
 
 export interface QuizQuestion {
