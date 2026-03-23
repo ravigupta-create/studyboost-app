@@ -1,6 +1,12 @@
 import type { NextConfig } from "next";
 
+const isGHPages = process.env.GITHUB_PAGES === 'true';
+
 const nextConfig: NextConfig = {
+  output: 'export',
+  basePath: isGHPages ? '/studyboost-app' : '',
+  assetPrefix: isGHPages ? '/studyboost-app/' : '',
+  images: { unoptimized: true },
   async headers() {
     return [
       {
