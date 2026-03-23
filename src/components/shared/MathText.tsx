@@ -8,7 +8,7 @@ export function MathText({ text }: { text: string }) {
   const html = useMemo(() => {
     return text.replace(/\$([^$]+)\$/g, (_, tex) => {
       try {
-        return katex.renderToString(tex, { throwOnError: false });
+        return katex.renderToString(tex, { throwOnError: false, output: 'html' });
       } catch {
         return tex;
       }
