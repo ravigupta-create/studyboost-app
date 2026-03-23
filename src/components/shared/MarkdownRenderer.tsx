@@ -24,7 +24,7 @@ const sanitizeSchema = {
 const remarkPlugins = [remarkGfm, remarkMath];
 const rehypePlugins = [
   [rehypeSanitize, sanitizeSchema],
-  rehypeKatex,
+  [rehypeKatex, { output: 'html' }],
   rehypeHighlight,
 ] as never[];
 

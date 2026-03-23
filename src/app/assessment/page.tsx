@@ -69,10 +69,9 @@ export default function AssessmentPage() {
     setCurrentIndex(pausedData.currentIndex);
     setAnswers(pausedData.answers);
     setStartTime(pausedData.startTime);
-    clearPausedAssessment();
     setPausedData(null);
     setPhase('quiz');
-  }, [pausedData, clearPausedAssessment]);
+  }, [pausedData]);
 
   const discardPaused = useCallback(() => {
     clearPausedAssessment();
@@ -93,11 +92,23 @@ export default function AssessmentPage() {
     setPhase('quiz');
   }, [addToast]);
 
+  // Auto-save quiz progress to localStorage on every state change
+  useEffect(() => {
+    if (phase !== 'quiz' || !selectedCourse) return;
+    savePausedAssessment({
+      courseId: selectedCourse.id,
+      questions,
+      currentIndex,
+      answers,
+      startTime,
+    });
+  }, [phase, selectedCourse, questions, currentIndex, answers, startTime, savePausedAssessment]);
+
   const advanceQuestion = useCallback(() => {
     if (currentIndex < questions.length - 1) {
       setCurrentIndex(prev => prev + 1);
     } else {
-      finishQuiz();
+      setPhase('finishing');
     }
   }, [currentIndex, questions.length]);
 
@@ -116,18 +127,12 @@ export default function AssessmentPage() {
 
   const handlePause = useCallback(() => {
     if (!selectedCourse) return;
-    savePausedAssessment({
-      courseId: selectedCourse.id,
-      questions,
-      currentIndex,
-      answers,
-      startTime,
-    });
+    // Auto-save already handled by effect — just navigate back
     addToast('Assessment paused. You can resume anytime.', 'info');
     setPhase('select');
     setSelectedCourse(null);
     setPausedData(getPausedAssessment());
-  }, [selectedCourse, questions, currentIndex, answers, startTime, savePausedAssessment, addToast, getPausedAssessment]);
+  }, [selectedCourse, addToast, getPausedAssessment]);
 
   // Keyboard support
   useEffect(() => {
@@ -147,7 +152,7 @@ export default function AssessmentPage() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  });
+  }, [phase, answers, currentIndex, questions, advanceQuestion]);
 
   const unitScores = useMemo((): UnitScore[] => {
     if (!selectedCourse || questions.length === 0) return [];
