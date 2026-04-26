@@ -1,0 +1,6 @@
+User-Agent: *
+Allow: /
+Disallow: /_next/
+Disallow: /api/
+
+Sitemap: https://ravigupta-create.github.io/studyboost-app/sitemap.xml
