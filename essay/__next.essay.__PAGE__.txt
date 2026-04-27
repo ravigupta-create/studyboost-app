@@ -3,7 +3,7 @@
 3:I[71135,["/studyboost-app/_next/static/chunks/9419abfa7a0dce41.js","/studyboost-app/_next/static/chunks/3e64b4e615cb6f10.js","/studyboost-app/_next/static/chunks/60e32a0659316333.js","/studyboost-app/_next/static/chunks/4a7747dff4c1a4db.js"],"default"]
 6:I[97367,["/studyboost-app/_next/static/chunks/ff1a16fafef87110.js","/studyboost-app/_next/static/chunks/0bd6498bda341889.js"],"OutletBoundary"]
 7:"$Sreact.suspense"
-0:{"buildId":"LFqTIQ1VoU3J499vdDAac","rsc":["$","$1","c",{"children":[["$","$L2",null,{"Component":"$3","serverProvidedParams":{"searchParams":{},"params":{},"promises":["$@4","$@5"]}}],[["$","script","script-0",{"src":"/studyboost-app/_next/static/chunks/4a7747dff4c1a4db.js","async":true}]],["$","$L6",null,{"children":["$","$7",null,{"name":"Next.MetadataOutlet","children":"$@8"}]}]]}],"loading":null,"isPartial":false}
+0:{"buildId":"EjPqH0m-3Bv3q2T8yhOtt","rsc":["$","$1","c",{"children":[["$","$L2",null,{"Component":"$3","serverProvidedParams":{"searchParams":{},"params":{},"promises":["$@4","$@5"]}}],[["$","script","script-0",{"src":"/studyboost-app/_next/static/chunks/4a7747dff4c1a4db.js","async":true}]],["$","$L6",null,{"children":["$","$7",null,{"name":"Next.MetadataOutlet","children":"$@8"}]}]]}],"loading":null,"isPartial":false}
 4:{}
 5:{}
 8:null
