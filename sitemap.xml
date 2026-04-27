@@ -793,6 +793,12 @@
     <priority>0.5</priority>
   </url>
   <url>
+    <loc>https://ravigupta-create.github.io/studyboost-app/offline/</loc>
+    <lastmod>2026-04-27</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
     <loc>https://ravigupta-create.github.io/studyboost-app/paraphrase/</loc>
     <lastmod>2026-04-27</lastmod>
     <changefreq>monthly</changefreq>
